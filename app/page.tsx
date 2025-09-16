@@ -26,20 +26,61 @@ export default function Home() {
   const knownAlertIdsRef = useRef<Set<string>>(new Set());
   const isFirstLoadRef = useRef(true);
   const audioCtxRef = useRef<AudioContext | null>(null);
+  const [audioUnlocked, setAudioUnlocked] = useState(false);
+  const [soundEnabled, setSoundEnabled] = useState(false);
 
   async function signOut() {
     await supabase.auth.signOut();
   }
 
-  function playDing() {
+  function ensureAudioContext(): AudioContext | null {
     try {
       if (!audioCtxRef.current) {
-        audioCtxRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
+        const AC = (window as any).AudioContext || (window as any).webkitAudioContext;
+        if (!AC) return null;
+        audioCtxRef.current = new AC();
       }
-      const ctx = audioCtxRef.current;
+      return audioCtxRef.current;
+    } catch {
+      return null;
+    }
+  }
+
+  async function enableSound() {
+    const ctx = ensureAudioContext();
+    if (!ctx) return;
+    try {
+      if (ctx.state === "suspended") {
+        await ctx.resume();
+      }
+      // Play a very short, quiet blip to finalize unlock on some browsers
+      const oscillator = ctx.createOscillator();
+      const gain = ctx.createGain();
+      oscillator.type = "sine";
+      oscillator.frequency.value = 600;
+      gain.gain.setValueAtTime(0.0001, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.02, ctx.currentTime + 0.01);
+      gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.06);
+      oscillator.connect(gain);
+      gain.connect(ctx.destination);
+      oscillator.start();
+      oscillator.stop(ctx.currentTime + 0.08);
+    } catch {}
+    setAudioUnlocked(true);
+    setSoundEnabled(true);
+  }
+
+  function disableSound() {
+    setSoundEnabled(false);
+  }
+
+  function playDing() {
+    if (!soundEnabled || !audioUnlocked) return;
+    try {
+      const ctx = ensureAudioContext();
       if (!ctx) return;
       if (ctx.state === "suspended") {
-        // Attempt to resume; may require a user gesture in some browsers
+        // If suspended and no prior unlock, skip silently; user must enable
         ctx.resume().catch(() => {});
       }
       const oscillator = ctx.createOscillator();
@@ -146,7 +187,16 @@ export default function Home() {
         <h1>Robopet Dashboard</h1>
         {user ? (
           <section className="w-full max-w-2xl mt-4">
-            <h2 className="text-lg font-semibold mb-2">Alerts</h2>
+            <div className="flex items-center justify-between mb-2">
+              <h2 className="text-lg font-semibold">Alerts</h2>
+              <div className="flex items-center gap-2">
+                {audioUnlocked && soundEnabled ? (
+                  <button onClick={disableSound} className="text-xs px-2 py-1 rounded border">Sound: On</button>
+                ) : (
+                  <button onClick={enableSound} className="text-xs px-2 py-1 rounded border">Enable sound</button>
+                )}
+              </div>
+            </div>
             {alertsError ? (
               <p className="text-red-600 text-sm">{alertsError}</p>
             ) : null}
