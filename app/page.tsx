@@ -28,6 +28,8 @@ export default function Home() {
   const audioCtxRef = useRef<AudioContext | null>(null);
   const [audioUnlocked, setAudioUnlocked] = useState(false);
   const [soundEnabled, setSoundEnabled] = useState(false);
+  const audioElRef = useRef<HTMLAudioElement | null>(null);
+  const [beepUrl, setBeepUrl] = useState<string | null>(null);
 
   async function signOut() {
     await supabase.auth.signOut();
@@ -46,57 +48,115 @@ export default function Home() {
     }
   }
 
+  function createBeepDataUrl({
+    frequency = 880,
+    durationSec = 0.35,
+    sampleRate = 44100,
+    volume = 0.4,
+  } = {}): string {
+    const numSamples = Math.floor(durationSec * sampleRate);
+    const buffer = new ArrayBuffer(44 + numSamples * 2);
+    const view = new DataView(buffer);
+
+    function writeString(offset: number, str: string) {
+      for (let i = 0; i < str.length; i++) {
+        view.setUint8(offset + i, str.charCodeAt(i));
+      }
+    }
+
+    const numChannels = 1;
+    const bytesPerSample = 2;
+    const blockAlign = numChannels * bytesPerSample;
+    const byteRate = sampleRate * blockAlign;
+
+    // RIFF header
+    writeString(0, "RIFF");
+    view.setUint32(4, 36 + numSamples * bytesPerSample, true);
+    writeString(8, "WAVE");
+
+    // fmt chunk
+    writeString(12, "fmt ");
+    view.setUint32(16, 16, true); // PCM chunk size
+    view.setUint16(20, 1, true); // PCM format
+    view.setUint16(22, numChannels, true);
+    view.setUint32(24, sampleRate, true);
+    view.setUint32(28, byteRate, true);
+    view.setUint16(32, blockAlign, true);
+    view.setUint16(34, 16, true); // bits per sample
+
+    // data chunk
+    writeString(36, "data");
+    view.setUint32(40, numSamples * bytesPerSample, true);
+
+    let offset = 44;
+    for (let i = 0; i < numSamples; i++) {
+      const t = i / sampleRate;
+      const sample = Math.sin(2 * Math.PI * frequency * t) * volume;
+      const s = Math.max(-1, Math.min(1, sample));
+      view.setInt16(offset, s < 0 ? s * 0x8000 : s * 0x7fff, true);
+      offset += 2;
+    }
+
+    const u8 = new Uint8Array(buffer);
+    let binary = "";
+    for (let i = 0; i < u8.length; i++) binary += String.fromCharCode(u8[i]);
+    const base64 = typeof window === "undefined" ? "" : window.btoa(binary);
+    return `data:audio/wav;base64,${base64}`;
+  }
+
   async function enableSound() {
     const ctx = ensureAudioContext();
-    if (!ctx) return;
-    try {
-      if (ctx.state === "suspended") {
-        await ctx.resume();
-      }
-      // Play a very short, quiet blip to finalize unlock on some browsers
-      const oscillator = ctx.createOscillator();
-      const gain = ctx.createGain();
-      oscillator.type = "sine";
-      oscillator.frequency.value = 600;
-      gain.gain.setValueAtTime(0.0001, ctx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.02, ctx.currentTime + 0.01);
-      gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.06);
-      oscillator.connect(gain);
-      gain.connect(ctx.destination);
-      oscillator.start();
-      oscillator.stop(ctx.currentTime + 0.08);
-    } catch {}
+    if (ctx && ctx.state === "suspended") {
+      try { await ctx.resume(); } catch {}
+    }
+    if (!beepUrl) {
+      try { setBeepUrl(createBeepDataUrl()); } catch {}
+    }
     setAudioUnlocked(true);
     setSoundEnabled(true);
+    try { await playDing(); } catch {}
   }
 
   function disableSound() {
     setSoundEnabled(false);
   }
 
-  function playDing() {
-    if (!soundEnabled || !audioUnlocked) return;
+  async function playDing() {
+    if (!soundEnabled) return;
+
+    // Try Web Audio first
     try {
       const ctx = ensureAudioContext();
-      if (!ctx) return;
-      if (ctx.state === "suspended") {
-        // If suspended and no prior unlock, skip silently; user must enable
-        ctx.resume().catch(() => {});
+      if (ctx) {
+        if (ctx.state === "suspended") {
+          try { await ctx.resume(); } catch {}
+        }
+        const oscillator = ctx.createOscillator();
+        const gain = ctx.createGain();
+        oscillator.type = "sine";
+        oscillator.frequency.value = 880; // A5
+        gain.gain.setValueAtTime(0.0001, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.35, ctx.currentTime + 0.02);
+        gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.35);
+        oscillator.connect(gain);
+        gain.connect(ctx.destination);
+        oscillator.start();
+        oscillator.stop(ctx.currentTime + 0.37);
+        return;
       }
-      const oscillator = ctx.createOscillator();
-      const gain = ctx.createGain();
-      oscillator.type = "sine";
-      oscillator.frequency.value = 880; // A5
-      gain.gain.setValueAtTime(0.0001, ctx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.2, ctx.currentTime + 0.01);
-      gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.2);
-      oscillator.connect(gain);
-      gain.connect(ctx.destination);
-      oscillator.start();
-      oscillator.stop(ctx.currentTime + 0.22);
-    } catch {
-      // ignore audio errors
-    }
+    } catch {}
+
+    // Fallback to HTMLAudioElement if Web Audio fails or unavailable
+    try {
+      if (!beepUrl && typeof window !== "undefined") {
+        setBeepUrl(createBeepDataUrl());
+      }
+      const el = audioElRef.current;
+      if (el) {
+        el.currentTime = 0;
+        await el.play();
+      }
+    } catch {}
   }
 
   useEffect(() => {
@@ -152,7 +212,9 @@ export default function Home() {
               break;
             }
           }
-          if (hasNew) playDing();
+          if (hasNew) {
+            try { await playDing(); } catch {}
+          }
         }
         knownAlertIdsRef.current = currentIds;
 
@@ -191,7 +253,10 @@ export default function Home() {
               <h2 className="text-lg font-semibold">Alerts</h2>
               <div className="flex items-center gap-2">
                 {audioUnlocked && soundEnabled ? (
-                  <button onClick={disableSound} className="text-xs px-2 py-1 rounded border">Sound: On</button>
+                  <>
+                    <button onClick={disableSound} className="text-xs px-2 py-1 rounded border">Sound: On</button>
+                    <button onClick={() => { playDing().catch(() => {}); }} className="text-xs px-2 py-1 rounded border">Test sound</button>
+                  </>
                 ) : (
                   <button onClick={enableSound} className="text-xs px-2 py-1 rounded border">Enable sound</button>
                 )}
@@ -223,6 +288,10 @@ export default function Home() {
               </ul>
             )}
             
+            {beepUrl ? (
+              <audio ref={audioElRef} src={beepUrl} preload="auto" className="hidden" />
+            ) : null}
+
           </section>
         ) : null}
         
