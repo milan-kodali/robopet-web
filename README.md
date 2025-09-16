@@ -1,5 +1,19 @@
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
+## Environment variables
+
+Create a `.env.local` file in the project root with values from your Supabase project settings:
+
+```
+NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
+```
+
+## Auth
+
+- The app uses a client-side Supabase provider to keep the session in React context.
+- Visit `/login` to sign in or create an account. After login, you are redirected to `/` and the Supabase client is active.
+
 ## Getting Started
 
 First, run the development server:
