@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { getBrowserSupabaseClient } from "@/lib/supabaseClient";
 import { useAuth } from "@/app/providers";
@@ -23,8 +23,39 @@ export default function Home() {
   const [loadingAlerts, setLoadingAlerts] = useState(false);
   const [alertsError, setAlertsError] = useState<string | null>(null);
 
+  const knownAlertIdsRef = useRef<Set<string>>(new Set());
+  const isFirstLoadRef = useRef(true);
+  const audioCtxRef = useRef<AudioContext | null>(null);
+
   async function signOut() {
     await supabase.auth.signOut();
+  }
+
+  function playDing() {
+    try {
+      if (!audioCtxRef.current) {
+        audioCtxRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
+      }
+      const ctx = audioCtxRef.current;
+      if (!ctx) return;
+      if (ctx.state === "suspended") {
+        // Attempt to resume; may require a user gesture in some browsers
+        ctx.resume().catch(() => {});
+      }
+      const oscillator = ctx.createOscillator();
+      const gain = ctx.createGain();
+      oscillator.type = "sine";
+      oscillator.frequency.value = 880; // A5
+      gain.gain.setValueAtTime(0.0001, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.2, ctx.currentTime + 0.01);
+      gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.2);
+      oscillator.connect(gain);
+      gain.connect(ctx.destination);
+      oscillator.start();
+      oscillator.stop(ctx.currentTime + 0.22);
+    } catch {
+      // ignore audio errors
+    }
   }
 
   useEffect(() => {
@@ -32,9 +63,12 @@ export default function Home() {
     if (!userId) return;
 
     let isMounted = true;
-    async function fetchAlerts() {
-      setLoadingAlerts(true);
+    let intervalId: ReturnType<typeof setInterval> | null = null;
+
+    async function fetchAlertsOnce({ shouldSignalNew }: { shouldSignalNew: boolean }) {
+      if (!isMounted) return;
       setAlertsError(null);
+      if (isFirstLoadRef.current) setLoadingAlerts(true);
       try {
         const { data: alertsData, error: alertsErr } = await supabase
           .from("alerts")
@@ -46,35 +80,62 @@ export default function Home() {
         if (alertsErr) throw alertsErr;
         const baseAlerts = (alertsData ?? []) as AlertRow[];
 
-        if (baseAlerts.length === 0) {
-          if (isMounted) setAlerts([]);
-          return;
+        const eventIds = baseAlerts.length
+          ? Array.from(new Set(baseAlerts.map(a => a.trigger_event)))
+          : [];
+
+        let eventsById = new Map<string, EventRow>();
+        if (eventIds.length > 0) {
+          const { data: eventsData, error: eventsErr } = await supabase
+            .from("events")
+            .select("id, type")
+            .in("id", eventIds);
+          if (eventsErr) throw eventsErr;
+          eventsById = new Map<string, EventRow>((eventsData ?? []).map((e: any) => [String(e.id), e as EventRow]));
         }
 
-        const eventIds = Array.from(new Set(baseAlerts.map(a => a.trigger_event)));
-        const { data: eventsData, error: eventsErr } = await supabase
-          .from("events")
-          .select("id, type")
-          .in("id", eventIds);
-        if (eventsErr) throw eventsErr;
-
-        const eventsById = new Map<string, EventRow>((eventsData ?? []).map((e: any) => [String(e.id), e as EventRow]));
         const withEvents: AlertWithEvent[] = baseAlerts.map(a => ({
           ...a,
           event: eventsById.get(String(a.trigger_event)) ?? null,
         }));
 
-        if (isMounted) setAlerts(withEvents);
+        if (!isMounted) return;
+
+        // Detect new alerts by id
+        const currentIds = new Set(withEvents.map(a => a.id));
+        if (!isFirstLoadRef.current && shouldSignalNew) {
+          let hasNew = false;
+          for (const id of currentIds) {
+            if (!knownAlertIdsRef.current.has(id)) {
+              hasNew = true;
+              break;
+            }
+          }
+          if (hasNew) playDing();
+        }
+        knownAlertIdsRef.current = currentIds;
+
+        setAlerts(withEvents);
       } catch (err: any) {
         if (isMounted) setAlertsError(err?.message ?? "Failed to load alerts");
       } finally {
-        if (isMounted) setLoadingAlerts(false);
+        if (isMounted && isFirstLoadRef.current) {
+          setLoadingAlerts(false);
+          isFirstLoadRef.current = false;
+        }
       }
     }
 
-    fetchAlerts();
+    // Initial fetch, don't ding
+    fetchAlertsOnce({ shouldSignalNew: false });
+    // Poll every 5 seconds, ding if new
+    intervalId = setInterval(() => {
+      fetchAlertsOnce({ shouldSignalNew: true });
+    }, 5000);
+
     return () => {
       isMounted = false;
+      if (intervalId) clearInterval(intervalId);
     };
   }, [user, supabase]);
 
