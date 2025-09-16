@@ -22,11 +22,31 @@ export default function Home() {
   const [alerts, setAlerts] = useState<AlertWithEvent[]>([]);
   const [loadingAlerts, setLoadingAlerts] = useState(false);
   const [alertsError, setAlertsError] = useState<string | null>(null);
+  const [dismissingById, setDismissingById] = useState<Record<string, boolean>>({});
 
   const isFirstLoadRef = useRef(true);
 
   async function signOut() {
     await supabase.auth.signOut();
+  }
+
+  async function dismissAlert(alertId: string) {
+    setAlertsError(null);
+    setDismissingById(prev => ({ ...prev, [alertId]: true }));
+    try {
+      const { data, error } = await supabase.functions.invoke("dismiss-alert", {
+        body: { alert_id: alertId },
+      });
+
+      if (error) throw error as any;
+
+      // Optimistically remove the alert from the list
+      setAlerts(prev => prev.filter(a => a.id !== alertId));
+    } catch (err: any) {
+      setAlertsError(err?.message ?? "Failed to dismiss alert");
+    } finally {
+      setDismissingById(prev => ({ ...prev, [alertId]: false }));
+    }
   }
 
   useEffect(() => {
@@ -115,12 +135,22 @@ export default function Home() {
                     <div className="flex items-center justify-between">
                       <div>
                         <p className="text-sm">
-                          <span className="font-medium">Event Type:</span>{" "}
+                          <span className="font-medium"></span>{" "}
                           {a.event?.type ?? "Unknown"}
                         </p>
                         <p className="text-xs text-gray-500">{new Date(a.created_at).toLocaleString()}</p>
                       </div>
-                      <span className="text-xs px-2 py-1 rounded border capitalize">{a.status}</span>
+                      {a.status === "active" ? (
+                        <button
+                          onClick={() => dismissAlert(a.id)}
+                          disabled={!!dismissingById[a.id]}
+                          className="text-xs px-2 py-1 rounded border disabled:opacity-50"
+                        >
+                          {dismissingById[a.id] ? "Dismissing…" : "Dismiss"}
+                        </button>
+                      ) : (
+                        <span className="text-xs px-2 py-1 rounded border capitalize">{a.status}</span>
+                      )}
                     </div>
                   </li>
                 ))}
