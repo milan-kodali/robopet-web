@@ -23,136 +23,10 @@ export default function Home() {
   const [loadingAlerts, setLoadingAlerts] = useState(false);
   const [alertsError, setAlertsError] = useState<string | null>(null);
 
-  const knownAlertIdsRef = useRef<Set<string>>(new Set());
-  const latestCreatedAtRef = useRef<string | null>(null);
   const isFirstLoadRef = useRef(true);
-  const audioCtxRef = useRef<AudioContext | null>(null);
-  const [audioUnlocked, setAudioUnlocked] = useState(false);
-  const [soundEnabled, setSoundEnabled] = useState(false);
-  const audioElRef = useRef<HTMLAudioElement | null>(null);
-  const [beepUrl, setBeepUrl] = useState<string | null>(null);
 
   async function signOut() {
     await supabase.auth.signOut();
-  }
-
-  function ensureAudioContext(): AudioContext | null {
-    try {
-      if (!audioCtxRef.current) {
-        const AC = (window as any).AudioContext || (window as any).webkitAudioContext;
-        if (!AC) return null;
-        audioCtxRef.current = new AC();
-      }
-      return audioCtxRef.current;
-    } catch {
-      return null;
-    }
-  }
-
-  function createBeepDataUrl({
-    frequency = 880,
-    durationSec = 0.35,
-    sampleRate = 44100,
-    volume = 0.4,
-  } = {}): string {
-    const numSamples = Math.floor(durationSec * sampleRate);
-    const buffer = new ArrayBuffer(44 + numSamples * 2);
-    const view = new DataView(buffer);
-
-    function writeString(offset: number, str: string) {
-      for (let i = 0; i < str.length; i++) {
-        view.setUint8(offset + i, str.charCodeAt(i));
-      }
-    }
-
-    const numChannels = 1;
-    const bytesPerSample = 2;
-    const blockAlign = numChannels * bytesPerSample;
-    const byteRate = sampleRate * blockAlign;
-
-    writeString(0, "RIFF");
-    view.setUint32(4, 36 + numSamples * bytesPerSample, true);
-    writeString(8, "WAVE");
-
-    writeString(12, "fmt ");
-    view.setUint32(16, 16, true);
-    view.setUint16(20, 1, true);
-    view.setUint16(22, numChannels, true);
-    view.setUint32(24, sampleRate, true);
-    view.setUint32(28, byteRate, true);
-    view.setUint16(32, blockAlign, true);
-    view.setUint16(34, 16, true);
-
-    writeString(36, "data");
-    view.setUint32(40, numSamples * bytesPerSample, true);
-
-    let offset = 44;
-    for (let i = 0; i < numSamples; i++) {
-      const t = i / sampleRate;
-      const sample = Math.sin(2 * Math.PI * frequency * t) * volume;
-      const s = Math.max(-1, Math.min(1, sample));
-      view.setInt16(offset, s < 0 ? s * 0x8000 : s * 0x7fff, true);
-      offset += 2;
-    }
-
-    const u8 = new Uint8Array(buffer);
-    let binary = "";
-    for (let i = 0; i < u8.length; i++) binary += String.fromCharCode(u8[i]);
-    const base64 = typeof window === "undefined" ? "" : window.btoa(binary);
-    return `data:audio/wav;base64,${base64}`;
-  }
-
-  async function enableSound() {
-    const ctx = ensureAudioContext();
-    if (ctx && ctx.state === "suspended") {
-      try { await ctx.resume(); } catch {}
-    }
-    if (!beepUrl) {
-      try { setBeepUrl(createBeepDataUrl()); } catch {}
-    }
-    setAudioUnlocked(true);
-    setSoundEnabled(true);
-    try { await playDing(); } catch {}
-  }
-
-  function disableSound() {
-    setSoundEnabled(false);
-  }
-
-  async function playDing() {
-    if (!soundEnabled) return;
-
-    try {
-      const ctx = ensureAudioContext();
-      if (ctx) {
-        if (ctx.state === "suspended") {
-          try { await ctx.resume(); } catch {}
-        }
-        const oscillator = ctx.createOscillator();
-        const gain = ctx.createGain();
-        oscillator.type = "sine";
-        oscillator.frequency.value = 880;
-        gain.gain.setValueAtTime(0.0001, ctx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.35, ctx.currentTime + 0.02);
-        gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.35);
-        oscillator.connect(gain);
-        gain.connect(ctx.destination);
-        oscillator.start();
-        oscillator.stop(ctx.currentTime + 0.37);
-        return;
-      }
-    } catch {}
-
-    try {
-      if (!beepUrl && typeof window !== "undefined") {
-        setBeepUrl(createBeepDataUrl());
-      }
-      const el = audioElRef.current;
-      if (el) {
-        el.currentTime = 0;
-        await el.play();
-      }
-    } catch {}
   }
 
   useEffect(() => {
@@ -162,7 +36,7 @@ export default function Home() {
     let isMounted = true;
     let intervalId: ReturnType<typeof setInterval> | null = null;
 
-    async function fetchAlertsOnce({ shouldSignalNew }: { shouldSignalNew: boolean }) {
+    async function fetchAlertsOnce() {
       if (!isMounted) return;
       setAlertsError(null);
       if (isFirstLoadRef.current) setLoadingAlerts(true);
@@ -197,34 +71,7 @@ export default function Home() {
         }));
 
         if (!isMounted) return;
-
-        const currentIds = new Set(withEvents.map(a => a.id));
-        const newestCreatedAt = withEvents.length > 0 ? withEvents[0].created_at : null;
-
-        let shouldDing = false;
-        if (!isFirstLoadRef.current && shouldSignalNew) {
-          for (const id of currentIds) {
-            if (!knownAlertIdsRef.current.has(id)) {
-              shouldDing = true;
-              break;
-            }
-          }
-          if (!shouldDing && newestCreatedAt && latestCreatedAtRef.current) {
-            // Secondary check based on created_at
-            if (new Date(newestCreatedAt).getTime() > new Date(latestCreatedAtRef.current).getTime()) {
-              shouldDing = true;
-            }
-          }
-        }
-
-        knownAlertIdsRef.current = currentIds;
-        if (newestCreatedAt) latestCreatedAtRef.current = newestCreatedAt;
-
         setAlerts(withEvents);
-
-        if (shouldDing) {
-          try { await playDing(); } catch {}
-        }
       } catch (err: any) {
         if (isMounted) setAlertsError(err?.message ?? "Failed to load alerts");
       } finally {
@@ -235,9 +82,9 @@ export default function Home() {
       }
     }
 
-    fetchAlertsOnce({ shouldSignalNew: false });
+    fetchAlertsOnce();
     intervalId = setInterval(() => {
-      fetchAlertsOnce({ shouldSignalNew: true });
+      fetchAlertsOnce();
     }, 5000);
 
     return () => {
@@ -253,19 +100,7 @@ export default function Home() {
         <h1>Robopet Dashboard</h1>
         {user ? (
           <section className="w-full max-w-2xl mt-4">
-            <div className="flex items-center justify-between mb-2">
-              <h2 className="text-lg font-semibold">Alerts</h2>
-              <div className="flex items-center gap-2">
-                {audioUnlocked && soundEnabled ? (
-                  <>
-                    <button onClick={disableSound} className="text-xs px-2 py-1 rounded border">Sound: On</button>
-                    <button onClick={() => { playDing().catch(() => {}); }} className="text-xs px-2 py-1 rounded border">Test sound</button>
-                  </>
-                ) : (
-                  <button onClick={async () => { await enableSound(); }} className="text-xs px-2 py-1 rounded border">Enable sound</button>
-                )}
-              </div>
-            </div>
+            <h2 className="text-lg font-semibold mb-2">Alerts</h2>
             {alertsError ? (
               <p className="text-red-600 text-sm">{alertsError}</p>
             ) : null}
@@ -283,7 +118,7 @@ export default function Home() {
                           <span className="font-medium">Event Type:</span>{" "}
                           {a.event?.type ?? "Unknown"}
                         </p>
-                        <p className="text-xs text-gray-500">Created {new Date(a.created_at).toLocaleString()}</p>
+                        <p className="text-xs text-gray-500">{new Date(a.created_at).toLocaleString()}</p>
                       </div>
                       <span className="text-xs px-2 py-1 rounded border capitalize">{a.status}</span>
                     </div>
@@ -292,10 +127,6 @@ export default function Home() {
               </ul>
             )}
             
-            {beepUrl ? (
-              <audio ref={audioElRef} src={beepUrl} preload="auto" className="hidden" />
-            ) : null}
-
           </section>
         ) : null}
         
