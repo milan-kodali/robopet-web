@@ -24,6 +24,7 @@ export default function Home() {
   const [alertsError, setAlertsError] = useState<string | null>(null);
 
   const knownAlertIdsRef = useRef<Set<string>>(new Set());
+  const latestCreatedAtRef = useRef<string | null>(null);
   const isFirstLoadRef = useRef(true);
   const audioCtxRef = useRef<AudioContext | null>(null);
   const [audioUnlocked, setAudioUnlocked] = useState(false);
@@ -69,22 +70,19 @@ export default function Home() {
     const blockAlign = numChannels * bytesPerSample;
     const byteRate = sampleRate * blockAlign;
 
-    // RIFF header
     writeString(0, "RIFF");
     view.setUint32(4, 36 + numSamples * bytesPerSample, true);
     writeString(8, "WAVE");
 
-    // fmt chunk
     writeString(12, "fmt ");
-    view.setUint32(16, 16, true); // PCM chunk size
-    view.setUint16(20, 1, true); // PCM format
+    view.setUint32(16, 16, true);
+    view.setUint16(20, 1, true);
     view.setUint16(22, numChannels, true);
     view.setUint32(24, sampleRate, true);
     view.setUint32(28, byteRate, true);
     view.setUint16(32, blockAlign, true);
-    view.setUint16(34, 16, true); // bits per sample
+    view.setUint16(34, 16, true);
 
-    // data chunk
     writeString(36, "data");
     view.setUint32(40, numSamples * bytesPerSample, true);
 
@@ -124,7 +122,6 @@ export default function Home() {
   async function playDing() {
     if (!soundEnabled) return;
 
-    // Try Web Audio first
     try {
       const ctx = ensureAudioContext();
       if (ctx) {
@@ -134,7 +131,7 @@ export default function Home() {
         const oscillator = ctx.createOscillator();
         const gain = ctx.createGain();
         oscillator.type = "sine";
-        oscillator.frequency.value = 880; // A5
+        oscillator.frequency.value = 880;
         gain.gain.setValueAtTime(0.0001, ctx.currentTime);
         gain.gain.exponentialRampToValueAtTime(0.35, ctx.currentTime + 0.02);
         gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.35);
@@ -146,7 +143,6 @@ export default function Home() {
       }
     } catch {}
 
-    // Fallback to HTMLAudioElement if Web Audio fails or unavailable
     try {
       if (!beepUrl && typeof window !== "undefined") {
         setBeepUrl(createBeepDataUrl());
@@ -202,23 +198,33 @@ export default function Home() {
 
         if (!isMounted) return;
 
-        // Detect new alerts by id
         const currentIds = new Set(withEvents.map(a => a.id));
+        const newestCreatedAt = withEvents.length > 0 ? withEvents[0].created_at : null;
+
+        let shouldDing = false;
         if (!isFirstLoadRef.current && shouldSignalNew) {
-          let hasNew = false;
           for (const id of currentIds) {
             if (!knownAlertIdsRef.current.has(id)) {
-              hasNew = true;
+              shouldDing = true;
               break;
             }
           }
-          if (hasNew) {
-            try { await playDing(); } catch {}
+          if (!shouldDing && newestCreatedAt && latestCreatedAtRef.current) {
+            // Secondary check based on created_at
+            if (new Date(newestCreatedAt).getTime() > new Date(latestCreatedAtRef.current).getTime()) {
+              shouldDing = true;
+            }
           }
         }
+
         knownAlertIdsRef.current = currentIds;
+        if (newestCreatedAt) latestCreatedAtRef.current = newestCreatedAt;
 
         setAlerts(withEvents);
+
+        if (shouldDing) {
+          try { await playDing(); } catch {}
+        }
       } catch (err: any) {
         if (isMounted) setAlertsError(err?.message ?? "Failed to load alerts");
       } finally {
@@ -229,9 +235,7 @@ export default function Home() {
       }
     }
 
-    // Initial fetch, don't ding
     fetchAlertsOnce({ shouldSignalNew: false });
-    // Poll every 5 seconds, ding if new
     intervalId = setInterval(() => {
       fetchAlertsOnce({ shouldSignalNew: true });
     }, 5000);
@@ -258,7 +262,7 @@ export default function Home() {
                     <button onClick={() => { playDing().catch(() => {}); }} className="text-xs px-2 py-1 rounded border">Test sound</button>
                   </>
                 ) : (
-                  <button onClick={enableSound} className="text-xs px-2 py-1 rounded border">Enable sound</button>
+                  <button onClick={async () => { await enableSound(); }} className="text-xs px-2 py-1 rounded border">Enable sound</button>
                 )}
               </div>
             </div>
