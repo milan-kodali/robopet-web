@@ -63,14 +63,6 @@ export default function Home() {
       if (publicUrl && (await urlExists(publicUrl))) {
         return { url: publicUrl, kind: inferKindFromExt(ext) };
       }
-      try {
-        const { data, error } = await supabase.storage.from("falls").createSignedUrl(path, 60 * 60);
-        if (!error && data?.signedUrl) {
-          if (await urlExists(data.signedUrl)) {
-            return { url: data.signedUrl, kind: inferKindFromExt(ext) };
-          }
-        }
-      } catch {}
     }
     return null;
   }
