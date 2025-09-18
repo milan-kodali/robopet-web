@@ -14,8 +14,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Robopet",
-  description: "Robopet Dashboard",
+  title: "Bobo",
+  description: "Bobo Dashboard",
 };
 
 export default function RootLayout({
