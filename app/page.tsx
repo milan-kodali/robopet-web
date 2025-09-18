@@ -178,11 +178,20 @@ export default function Home() {
     });
   }, [alerts, supabase, eventMediaById]);
 
+  function formatEventType(raw?: string): string {
+    if (!raw) return "Unknown";
+    return String(raw)
+      .split("_")
+      .filter(Boolean)
+      .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+      .join(" ");
+  }
+
   return (
     <div className="font-sans grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20">
       <main className="flex flex-col gap-[32px] row-start-2 items-center sm:items-start">
        
-        <h1>Bobo Alerts</h1>
+        <h1>Bobo</h1>
         {user ? (
           <section className="w-full max-w-2xl mt-4">
             <h2 className="text-lg font-semibold mb-2">New Alerts</h2>
@@ -201,7 +210,7 @@ export default function Home() {
                       <div>
                         <p className="text-sm">
                           <span className="font-medium"></span>{" "}
-                          {a.event?.type ?? "Unknown"}
+                          {formatEventType(a.event?.type)}
                         </p>
                         <p className="text-xs text-gray-500">{new Date(a.created_at).toLocaleString()}</p>
                         <div className="mt-1">
