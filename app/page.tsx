@@ -1,9 +1,11 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { getBrowserSupabaseClient } from "@/lib/supabaseClient";
 import { useAuth } from "@/app/providers";
+
+const pollInterval = 3.5 * 1000;
 
 export default function Home() {
   const { user } = useAuth();
@@ -25,6 +27,59 @@ export default function Home() {
   const [dismissingById, setDismissingById] = useState<Record<string, boolean>>({});
 
   const isFirstLoadRef = useRef(true);
+  const seenAlertIdsRef = useRef<Set<string>>(new Set());
+  const audioUnlockedRef = useRef(false);
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const dingBufferRef = useRef<AudioBuffer | null>(null);
+
+  // Initialize AudioContext lazily for wider browser support
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const AC = (window as any).AudioContext || (window as any).webkitAudioContext;
+    if (!AC) return;
+    audioContextRef.current = new AC();
+  }, []);
+
+  // Simple synthesized "ding" using WebAudio; avoids cross-origin and autoplay issues
+  async function loadDingBuffer(ctx: AudioContext): Promise<AudioBuffer> {
+    if (dingBufferRef.current) return dingBufferRef.current;
+    // Synthesize a brief two-tone ping into an AudioBuffer
+    const durationSec = 0.25;
+    const sampleRate = ctx.sampleRate;
+    const frameCount = Math.floor(durationSec * sampleRate);
+    const buffer = ctx.createBuffer(1, frameCount, sampleRate);
+    const data = buffer.getChannelData(0);
+    const f1 = 880; // A5
+    const f2 = 1320; // E6-ish
+    for (let i = 0; i < frameCount; i++) {
+      const t = i / sampleRate;
+      const env = Math.exp(-8 * t); // fast decay
+      const s = 0.55 * Math.sin(2 * Math.PI * f1 * t) + 0.45 * Math.sin(2 * Math.PI * f2 * t);
+      data[i] = s * env * 0.35; // keep it quiet
+    }
+    dingBufferRef.current = buffer;
+    return buffer;
+  }
+
+  async function playDing() {
+    try {
+      const ctx = audioContextRef.current;
+      if (!ctx) return;
+      // Some browsers require a user gesture to start/resume the context
+      if (ctx.state === "suspended" && audioUnlockedRef.current) {
+        await ctx.resume();
+      }
+      const buffer = await loadDingBuffer(ctx);
+      const source = ctx.createBufferSource();
+      source.buffer = buffer;
+      const gain = ctx.createGain();
+      gain.gain.value = 0.9;
+      source.connect(gain).connect(ctx.destination);
+      source.start();
+    } catch {
+      // no-op; sound is best-effort
+    }
+  }
 
   async function signOut() {
     await supabase.auth.signOut();
@@ -50,6 +105,9 @@ export default function Home() {
   }
 
   useEffect(() => {
+    // Reset seen alerts when user changes
+    seenAlertIdsRef.current = new Set();
+    isFirstLoadRef.current = true;
     const userId = user?.id;
     if (!userId) return;
 
@@ -91,6 +149,24 @@ export default function Home() {
         }));
 
         if (!isMounted) return;
+        // Detect newly arrived alerts (by id) compared to last seen set
+        if (!isFirstLoadRef.current) {
+          const newOnes: string[] = [];
+          for (const a of withEvents) {
+            const id = String(a.id);
+            if (!seenAlertIdsRef.current.has(id)) newOnes.push(id);
+          }
+          if (newOnes.length > 0) {
+            // Mark as seen before playing sound to avoid double fires
+            for (const id of newOnes) seenAlertIdsRef.current.add(id);
+            // Play one ding for the batch to avoid cacophony
+            playDing();
+          }
+        } else {
+          // On first load, seed the seen set but do not play any sound
+          seenAlertIdsRef.current = new Set(withEvents.map(a => String(a.id)));
+        }
+
         setAlerts(withEvents);
       } catch (err: any) {
         if (isMounted) setAlertsError(err?.message ?? "Failed to load alerts");
@@ -105,13 +181,35 @@ export default function Home() {
     fetchAlertsOnce();
     intervalId = setInterval(() => {
       fetchAlertsOnce();
-    }, 5000);
+    }, pollInterval);
 
     return () => {
       isMounted = false;
       if (intervalId) clearInterval(intervalId);
     };
   }, [user, supabase]);
+
+  // Unlock audio on first user interaction to satisfy autoplay policies
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const handler = async () => {
+      audioUnlockedRef.current = true;
+      const ctx = audioContextRef.current;
+      try {
+        if (ctx && ctx.state === "suspended") {
+          await ctx.resume();
+        }
+      } catch {}
+      window.removeEventListener("pointerdown", handler, { capture: true } as any);
+      window.removeEventListener("keydown", handler, { capture: true } as any);
+    };
+    window.addEventListener("pointerdown", handler, { capture: true } as any);
+    window.addEventListener("keydown", handler, { capture: true } as any);
+    return () => {
+      window.removeEventListener("pointerdown", handler, { capture: true } as any);
+      window.removeEventListener("keydown", handler, { capture: true } as any);
+    };
+  }, []);
 
   return (
     <div className="font-sans grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20">
