@@ -31,6 +31,23 @@ export default function Home() {
   const audioUnlockedRef = useRef(false);
   const audioContextRef = useRef<AudioContext | null>(null);
   const dingBufferRef = useRef<AudioBuffer | null>(null);
+  const blinkTimerRef = useRef<number | null>(null);
+
+  function triggerBgBlink() {
+    if (typeof document === "undefined") return;
+    const el = document.body;
+    if (!el) return;
+    // Restart the animation if it's already applied
+    el.classList.remove("blink-bg-red");
+    // Force reflow so re-adding the class retriggers the animation
+    void el.offsetWidth;
+    el.classList.add("blink-bg-red");
+    if (blinkTimerRef.current) window.clearTimeout(blinkTimerRef.current);
+    blinkTimerRef.current = window.setTimeout(() => {
+      el.classList.remove("blink-bg-red");
+      blinkTimerRef.current = null;
+    }, 900);
+  }
 
   // Initialize AudioContext lazily for wider browser support
   useEffect(() => {
@@ -161,6 +178,8 @@ export default function Home() {
             for (const id of newOnes) seenAlertIdsRef.current.add(id);
             // Play one ding for the batch to avoid cacophony
             playDing();
+            // Blink background to draw attention
+            triggerBgBlink();
           }
         } else {
           // On first load, seed the seen set but do not play any sound
@@ -208,6 +227,16 @@ export default function Home() {
     return () => {
       window.removeEventListener("pointerdown", handler, { capture: true } as any);
       window.removeEventListener("keydown", handler, { capture: true } as any);
+    };
+  }, []);
+
+  // Cleanup any pending blink and class on unmount
+  useEffect(() => {
+    return () => {
+      if (blinkTimerRef.current) window.clearTimeout(blinkTimerRef.current);
+      if (typeof document !== "undefined") {
+        document.body.classList.remove("blink-bg-red");
+      }
     };
   }, []);
 
