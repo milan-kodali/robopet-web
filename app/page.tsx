@@ -25,8 +25,10 @@ export default function Home() {
   const [loadingAlerts, setLoadingAlerts] = useState(false);
   const [alertsError, setAlertsError] = useState<string | null>(null);
   const [dismissingById, setDismissingById] = useState<Record<string, boolean>>({});
+  const [eventMediaById, setEventMediaById] = useState<Record<string, { url: string; kind: "image" | "video" } | null>>({});
 
   const isFirstLoadRef = useRef(true);
+  const resolvingMediaIdsRef = useRef<Set<string>>(new Set());
 
   async function signOut() {
     await supabase.auth.signOut();
@@ -115,11 +117,72 @@ export default function Home() {
     };
   }, [user, supabase]);
 
+  // Try to resolve media (image/video) for each alert's event id from Supabase Storage bucket 'falls'
+  useEffect(() => {
+    if (!alerts.length) return;
+
+    const candidateImageExts = ["jpg", "jpeg", "png", "webp", "gif"] as const;
+    const candidateVideoExts = ["mp4", "mov", "webm"] as const;
+    const candidateExts = [...candidateImageExts, ...candidateVideoExts];
+
+    function inferKindFromExt(ext: string): "image" | "video" {
+      return (candidateImageExts as readonly string[]).includes(ext.toLowerCase()) ? "image" : "video";
+    }
+
+    async function urlExists(url: string): Promise<boolean> {
+      try {
+        const head = await fetch(url, { method: "HEAD" });
+        if (head.ok) return true;
+      } catch {}
+      try {
+        const get = await fetch(url, { method: "GET", headers: { Range: "bytes=0-0" }, cache: "no-store" });
+        return get.ok;
+      } catch {
+        return false;
+      }
+    }
+
+    async function resolveMediaForEventId(eventId: string): Promise<{ url: string; kind: "image" | "video" } | null> {
+      for (const ext of candidateExts) {
+        const path = `${eventId}.${ext}`;
+        // Try public URL first
+        const publicUrl = supabase.storage.from("falls").getPublicUrl(path).data.publicUrl;
+        if (publicUrl && (await urlExists(publicUrl))) {
+          return { url: publicUrl, kind: inferKindFromExt(ext) };
+        }
+        // Fallback to signed URL (in case the bucket is private and policies allow signing client-side)
+        try {
+          const { data, error } = await supabase.storage.from("falls").createSignedUrl(path, 60 * 60);
+          if (!error && data?.signedUrl) {
+            if (await urlExists(data.signedUrl)) {
+              return { url: data.signedUrl, kind: inferKindFromExt(ext) };
+            }
+          }
+        } catch {}
+      }
+      return null;
+    }
+
+    const uniqueEventIds = Array.from(new Set(alerts.map(a => String(a.trigger_event))));
+    uniqueEventIds.forEach(eventId => {
+      if (eventMediaById[eventId] === undefined && !resolvingMediaIdsRef.current.has(eventId)) {
+        resolvingMediaIdsRef.current.add(eventId);
+        resolveMediaForEventId(eventId)
+          .then(result => {
+            setEventMediaById(prev => ({ ...prev, [eventId]: result }));
+          })
+          .finally(() => {
+            resolvingMediaIdsRef.current.delete(eventId);
+          });
+      }
+    });
+  }, [alerts, supabase, eventMediaById]);
+
   return (
     <div className="font-sans grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20">
       <main className="flex flex-col gap-[32px] row-start-2 items-center sm:items-start">
        
-        <h1>Bobo Dashboard</h1>
+        <h1>Bobo Alerts</h1>
         {user ? (
           <section className="w-full max-w-2xl mt-4">
             <h2 className="text-lg font-semibold mb-2">Alerts</h2>
@@ -154,6 +217,21 @@ export default function Home() {
                         <span className="text-xs px-2 py-1 rounded border capitalize">{a.status}</span>
                       )}
                     </div>
+                    {eventMediaById[String(a.trigger_event)] ? (
+                      eventMediaById[String(a.trigger_event)]!.kind === "image" ? (
+                        <img
+                          src={eventMediaById[String(a.trigger_event)]!.url}
+                          alt={`Event ${String(a.trigger_event)} media`}
+                          className="mt-3 max-h-64 rounded border"
+                        />
+                      ) : (
+                        <video
+                          src={eventMediaById[String(a.trigger_event)]!.url}
+                          controls
+                          className="mt-3 max-h-64 rounded border"
+                        />
+                      )
+                    ) : null}
                   </li>
                 ))}
               </ul>
