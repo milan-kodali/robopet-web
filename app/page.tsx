@@ -122,8 +122,8 @@ export default function Home() {
     if (!alerts.length) return;
 
     const candidateImageExts = ["jpg", "jpeg", "png", "webp", "gif"] as const;
-    const candidateVideoExts = ["mp4", "mov", "webm"] as const;
-    const candidateExts = [...candidateImageExts, ...candidateVideoExts];
+    const candidateVideoExts = ["mov", "mp4", "webm"] as const;
+    const candidateExts = [...candidateVideoExts,...candidateImageExts];
 
     function inferKindFromExt(ext: string): "image" | "video" {
       return (candidateImageExts as readonly string[]).includes(ext.toLowerCase()) ? "image" : "video";
