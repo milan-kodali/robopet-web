@@ -36,7 +36,7 @@ export default function Home() {
 
   // Media resolution helpers reused by active and past alerts
   const candidateImageExts = ["jpg"] as const;
-  const candidateVideoExts = ["mov", "mp4", "webm"] as const;
+  const candidateVideoExts = ["mov"] as const;
   const candidateExts = [...candidateVideoExts, ...candidateImageExts] as const;
 
   function inferKindFromExt(ext: string): "image" | "video" {
