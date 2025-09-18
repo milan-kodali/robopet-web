@@ -121,7 +121,7 @@ export default function Home() {
   useEffect(() => {
     if (!alerts.length) return;
 
-    const candidateImageExts = ["jpg", "jpeg", "png", "webp", "gif"] as const;
+    const candidateImageExts = ["jpg"] as const;
     const candidateVideoExts = ["mov", "mp4", "webm"] as const;
     const candidateExts = [...candidateVideoExts,...candidateImageExts];
 
