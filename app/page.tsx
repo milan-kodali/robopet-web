@@ -188,8 +188,8 @@ export default function Home() {
   }
 
   return (
-    <div className="font-sans grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20">
-      <main className="flex flex-col gap-[32px] row-start-2 items-center sm:items-start">
+    <div className="font-sans grid grid-rows-[1fr] items-start justify-items-center min-h-screen px-8 pb-20 sm:px-20">
+      <main className="flex flex-col gap-[32px] row-start-1 items-center mt-10 w-full">
        
         <h1>Bobo</h1>
         {user ? (
@@ -214,7 +214,7 @@ export default function Home() {
                         </p>
                         <p className="text-xs text-gray-500">{new Date(a.created_at).toLocaleString()}</p>
                         <div className="mt-1">
-                          <span className="inline-flex items-center rounded-full bg-red-100 text-red-800 px-2 py-0.5 text-xs font-medium">Possibly Dead ☠️ 🪦</span>
+                          <span className="inline-flex items-center rounded-full bg-red-100 text-red-800 px-2 py-0.5 text-xs font-medium">Dangerous</span>
                         </div>
                       </div>
                       {a.status === "active" ? (
