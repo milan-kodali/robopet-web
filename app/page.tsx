@@ -185,7 +185,7 @@ export default function Home() {
         <h1>Bobo Alerts</h1>
         {user ? (
           <section className="w-full max-w-2xl mt-4">
-            <h2 className="text-lg font-semibold mb-2">Alerts</h2>
+            <h2 className="text-lg font-semibold mb-2">New Alerts</h2>
             {alertsError ? (
               <p className="text-red-600 text-sm">{alertsError}</p>
             ) : null}
@@ -204,6 +204,9 @@ export default function Home() {
                           {a.event?.type ?? "Unknown"}
                         </p>
                         <p className="text-xs text-gray-500">{new Date(a.created_at).toLocaleString()}</p>
+                        <div className="mt-1">
+                          <span className="inline-flex items-center rounded-full bg-red-100 text-red-800 px-2 py-0.5 text-xs font-medium">Possibly Dead ☠️ 🪦</span>
+                        </div>
                       </div>
                       {a.status === "active" ? (
                         <button
