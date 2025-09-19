@@ -327,7 +327,7 @@ export default function Home() {
                 <div className="flex items-center justify-between">
                   <div>
                     <h1 className="text-3xl font-bold text-slate-900 dark:text-white">Grandpa's Alerts</h1>
-                    <p className="text-sm text-slate-600 dark:text-slate-400">450 10th St, San Francisco, CA 94103</p>
+                    <p className="text-sm text-slate-600 dark:text-slate-400">🏠 450 10th St, San Francisco, CA 94103</p>
                   </div>
                 </div>
               </div>
