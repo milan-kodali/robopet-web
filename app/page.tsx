@@ -333,8 +333,23 @@ export default function Home() {
               <section className="mb-10">
                 <div className="flex items-center justify-between mb-6">
                   <div className="flex items-center gap-3">
-                    <div className="h-8 w-8 rounded-lg {alerts.length > 0 ? 'bg-red-100 dark:bg-red-900/30' : 'bg-slate-100 dark:bg-slate-900/30'} flex items-center justify-center">
-                      <svg className="h-4 w-4 {alerts.length > 0 ? 'text-red-600 dark:text-red-400' : 'text-slate-600 dark:text-slate-400'}" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <div
+                    className={`h-8 w-8 rounded-lg flex items-center justify-center ${
+                      alerts.length > 0
+                        ? "bg-red-100 dark:bg-red-900/30"
+                        : "bg-slate-100 dark:bg-slate-900/30"
+                    }`}
+                  >
+                    <svg
+                      className={`h-4 w-4 ${
+                        alerts.length > 0
+                          ? "text-red-600 dark:text-red-400"
+                          : "text-slate-600 dark:text-slate-400"
+                      }`}
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                    >
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 18.5c-.77.833.192 2.5 1.732 2.5z" />
                       </svg>
                     </div>
@@ -373,8 +388,8 @@ export default function Home() {
                   </div>
                 ) : alerts.length === 0 ? (
                   <div className="text-center py-12">
-                    <div className="mx-auto h-16 w-16 rounded-full bg-green-100 dark:bg-green-900/30 flex items-center justify-center mb-4">
-                      <svg className="h-8 w-8 text-green-600 dark:text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <div className="mx-auto h-16 w-16 rounded-full bg-slate-100 dark:bg-slate-900/30 flex items-center justify-center mb-4">
+                      <svg className="h-8 w-8 text-slate-600 dark:text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                       </svg>
                     </div>
