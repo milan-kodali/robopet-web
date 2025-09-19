@@ -77,3 +77,39 @@ html {
 .blink-bg-red {
   animation: bg-blink-red 0.8s ease-in-out 1;
 }
+
+/* Utility: 4:3 aspect ratio crop container */
+.aspect-4\/3 {
+  position: relative;
+  width: 100%;
+}
+.aspect-4\/3::before {
+  content: "";
+  display: block;
+  padding-top: 75%;
+}
+.aspect-4\/3 > * {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* Utility: 16:9 aspect ratio crop container */
+.aspect-16\/9 {
+  position: relative;
+  width: 100%;
+}
+.aspect-16\/9::before {
+  content: "";
+  display: block;
+  padding-top: 56.25%;
+}
+.aspect-16\/9 > * {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}

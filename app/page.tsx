@@ -327,6 +327,7 @@ export default function Home() {
                 <div className="flex items-center justify-between">
                   <div>
                     <h1 className="text-3xl font-bold text-slate-900 dark:text-white">Grandpa's Alerts</h1>
+                    <p className="text-sm text-slate-600 dark:text-slate-400">450 10th St, San Francisco, CA 94103</p>
                   </div>
                 </div>
               </div>
@@ -448,20 +449,20 @@ export default function Home() {
                           </div>
                           
                           {eventMediaById[String(a.trigger_event)] ? (
-                            <div className="rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700 shadow-sm">
-                              {eventMediaById[String(a.trigger_event)]!.kind === "image" ? (
-                                <img
-                                  src={eventMediaById[String(a.trigger_event)]!.url}
-                                  alt={`Event ${String(a.trigger_event)} media`}
-                                  className="w-full max-h-80 object-cover"
-                                />
-                              ) : (
-                                <video
-                                  src={eventMediaById[String(a.trigger_event)]!.url}
-                                  controls
-                                  className="w-full max-h-80 object-cover"
-                                />
-                              )}
+                            <div className="rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700 shadow-sm max-w-[600px] mx-auto">
+                              <div className="aspect-16/9">
+                                {eventMediaById[String(a.trigger_event)]!.kind === "image" ? (
+                                  <img
+                                    src={eventMediaById[String(a.trigger_event)]!.url}
+                                    alt={`Event ${String(a.trigger_event)} media`}
+                                  />
+                                ) : (
+                                  <video
+                                    src={eventMediaById[String(a.trigger_event)]!.url}
+                                    controls
+                                  />
+                                )}
+                              </div>
                             </div>
                           ) : null}
                         </div>
@@ -481,7 +482,7 @@ export default function Home() {
                       </svg>
                     </div>
                     <div>
-                      <h2 className="text-xl font-bold text-slate-900 dark:text-white"> {pastAlerts.length} Past Alert{pastAlerts.length === 1 ? '' : 's'}</h2>
+                      <h2 className="text-xl font-bold text-slate-900 dark:text-white">Past Alerts</h2>
                     </div>
                   </div>
                   {pastAlerts.length > 0 && (
@@ -566,20 +567,20 @@ export default function Home() {
                           <div className="px-4 pb-4 border-t border-slate-200 dark:border-slate-700">
                             <div className="pt-4">
                               {eventMediaById[String(a.trigger_event)] ? (
-                                <div className="rounded-lg overflow-hidden border border-slate-200 dark:border-slate-700 shadow-sm">
-                                  {eventMediaById[String(a.trigger_event)]!.kind === "image" ? (
-                                    <img
-                                      src={eventMediaById[String(a.trigger_event)]!.url}
-                                      alt={`Event ${String(a.trigger_event)} media`}
-                                      className="w-full max-h-64 object-cover"
-                                    />
-                                  ) : (
-                                    <video
-                                      src={eventMediaById[String(a.trigger_event)]!.url}
-                                      controls
-                                      className="w-full max-h-64 object-cover"
-                                    />
-                                  )}
+                                <div className="rounded-lg overflow-hidden border border-slate-200 dark:border-slate-700 shadow-sm max-w-[600px] mx-auto">
+                                  <div className="aspect-16/9">
+                                    {eventMediaById[String(a.trigger_event)]!.kind === "image" ? (
+                                      <img
+                                        src={eventMediaById[String(a.trigger_event)]!.url}
+                                        alt={`Event ${String(a.trigger_event)} media`}
+                                      />
+                                    ) : (
+                                      <video
+                                        src={eventMediaById[String(a.trigger_event)]!.url}
+                                        controls
+                                      />
+                                    )}
+                                  </div>
                                 </div>
                               ) : (
                                 <div className="h-24 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 animate-pulse flex items-center justify-center">
