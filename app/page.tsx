@@ -37,7 +37,7 @@ export default function Home() {
 
   // Media resolution helpers reused by active and past alerts
   const candidateImageExts = ["jpg"] as const;
-  const candidateVideoExts = ["mp4","mov"] as const;
+  const candidateVideoExts = ["mp4"] as const;
   const candidateExts = [...candidateVideoExts, ...candidateImageExts] as const;
 
   function inferKindFromExt(ext: string): "image" | "video" {
@@ -457,10 +457,9 @@ export default function Home() {
                                     alt={`Event ${String(a.trigger_event)} media`}
                                   />
                                 ) : (
-                                  <video
-                                    src={eventMediaById[String(a.trigger_event)]!.url}
-                                    controls
-                                  />
+                                  <video controls preload="metadata" playsInline>
+                                    <source src={eventMediaById[String(a.trigger_event)]!.url} type="video/mp4" />
+                                  </video>
                                 )}
                               </div>
                             </div>
@@ -575,10 +574,9 @@ export default function Home() {
                                         alt={`Event ${String(a.trigger_event)} media`}
                                       />
                                     ) : (
-                                      <video
-                                        src={eventMediaById[String(a.trigger_event)]!.url}
-                                        controls
-                                      />
+                                      <video controls preload="metadata" playsInline>
+                                        <source src={eventMediaById[String(a.trigger_event)]!.url} type="video/mp4" />
+                                      </video>
                                     )}
                                   </div>
                                 </div>
