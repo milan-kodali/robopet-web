@@ -33,6 +33,7 @@ export default function Home() {
 
   const isFirstLoadRef = useRef(true);
   const resolvingMediaIdsRef = useRef<Set<string>>(new Set());
+  const isFirstPastLoadRef = useRef(true);
 
   // Media resolution helpers reused by active and past alerts
   const candidateImageExts = ["jpg"] as const;
@@ -183,7 +184,7 @@ export default function Home() {
     async function fetchPastAlertsOnce() {
       if (!isMounted) return;
       setPastAlertsError(null);
-      if (isFirstLoadRef.current) setLoadingPastAlerts(true);
+      if (isFirstPastLoadRef.current) setLoadingPastAlerts(true);
       try {
         const { data: alertsData, error: alertsErr } = await supabase
           .from("alerts")
@@ -220,8 +221,9 @@ export default function Home() {
       } catch (err: any) {
         if (isMounted) setPastAlertsError(err?.message ?? "Failed to load past alerts");
       } finally {
-        if (isMounted && isFirstLoadRef.current) {
+        if (isMounted && isFirstPastLoadRef.current) {
           setLoadingPastAlerts(false);
+          isFirstPastLoadRef.current = false;
         }
       }
     }
